@@ -33,3 +33,8 @@ training/dataset/
 *.mp4
 *.jpg
 *.jpeg
+*.mov
+screenshots/
+__pycache__/
+
+frontend/public/*.task
