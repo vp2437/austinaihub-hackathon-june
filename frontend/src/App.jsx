@@ -1,65 +1,169 @@
-// import CameraView from "./components/CameraView";
-// import CameraCapture from "./components/CameraCapture";
-// import AlertSound from "./components/AlertSound";
-import ScreenshotCard from "./components/ScreenshotCard.jsx";
+// // import CameraView from "./components/CameraView";
+// // import CameraCapture from "./components/CameraCapture";
+// // import AlertSound from "./components/AlertSound";
+// // import ScreenshotCard from "./components/ScreenshotCard.jsx";
+// import HistoryPanel from "./components/HistoryPanel.jsx";
 
-// import DetectionCard from "./components/DetectionCard";
+// // import DetectionCard from "./components/DetectionCard";
+// import "./App.css";
+
+// function App() {
+//   return (
+//     <div className="app">
+
+//       <div className="hero">
+
+//         <h1 className="title">
+//           If Hands
+//           Could Speak
+//         </h1>
+
+//         <p className="tagline">
+//           Because sometimes asking for help
+//           is silent.
+//         </p>
+
+//       </div>
+
+//       <div className="camera-section">
+
+//         <div className="camera-card">
+
+//           <div className="camera-wrapper">
+
+//             <HistoryPanel  />
+
+//           </div>
+
+//           <div className="status">
+
+//             <div className="badge">
+//               Scanning...
+//             </div>
+
+//             <div className="actions">
+
+//               <button>
+//                 Save
+//               </button>
+
+//               <button>
+//                 Download
+//               </button>
+
+//             </div>
+
+//           </div>
+
+//         </div>
+
+//       </div>
+
+//     </div>
+//   );
+// }
+
+// export default App;
+
+import { useState } from "react";
+import HistoryDash from "./components/HistoryDash";
+import HistoryPanel from "./components/HistoryPanel";
 import "./App.css";
 
 function App() {
-  return (
-    <div className="app">
 
-      <div className="hero">
+const [tab,setTab]=
+useState("camera");
 
-        <h1 className="title">
-          If Hands
-          Could Speak
-        </h1>
+return (
 
-        <p className="tagline">
-          Because sometimes asking for help
-          is silent.
-        </p>
+<div className="app">
 
-      </div>
+<header className="navbar">
 
-      <div className="camera-section">
+<div className="logo">
 
-        <div className="camera-card">
+Project Beacon
 
-          <div className="camera-wrapper">
+</div>
 
-            <ScreenshotCard  />
+<div className="center">
 
-          </div>
+<h1 className="title">
+If Hands Could Speak
+</h1>
 
-          <div className="status">
+<p className="tagline">
+Because sometimes asking for help is silent.
+</p>
 
-            <div className="badge">
-              Scanning...
-            </div>
+<div className="tabs">
 
-            <div className="actions">
+<button
+className={
+tab==="camera"
+?
+"tab active"
+:
+"tab"
+}
+onClick={()=>
+setTab("camera")
+}
+>
 
-              <button>
-                Save
-              </button>
+Camera
 
-              <button>
-                Download
-              </button>
+</button>
 
-            </div>
+<button
+className={
+tab==="gallery"
+?
+"tab active"
+:
+"tab"
+}
+onClick={()=>
+setTab("gallery")
+}
+>
 
-          </div>
+Gallery
 
-        </div>
+</button>
 
-      </div>
+</div>
 
-    </div>
-  );
+</div>
+
+</header>
+
+<main className="content">
+
+{
+tab==="camera"
+
+?
+
+<div className="camera-center">
+
+<HistoryPanel/>
+
+</div>
+
+:
+
+<HistoryDash/>
+
+}
+
+</main>
+
+</div>
+
+);
+
 }
 
 export default App;

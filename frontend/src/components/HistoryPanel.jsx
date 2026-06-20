@@ -1,119 +1,597 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Webcam from "react-webcam";
+import { FilesetResolver, HandLandmarker } from "@mediapipe/tasks-vision";
 
-export default function HistoryPanel({ detections = [], onClear }) {
-  const [expandedId, setExpandedId] = useState(null);
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17],
+];
 
-  const downloadEvidence = (detection, index) => {
-    const metadata = {
-      timestamp: detection.timestamp,
-      gesture: detection.gesture,
-      confidence: detection.confidence,
+export default function HistoryPanel() {
+  const webcamRef   = useRef(null);
+  const canvasRef   = useRef(null);
+  const landmarker  = useRef(null);
+  const rafRef      = useRef(null);
+  const processing  = useRef(false);
+  const mounted     = useRef(true);
+
+  const predictionRef = useRef({
+    gesture: "No Signal",
+    confidence: 0,
+  });
+  
+  const alertTriggered =
+  useRef(false);
+  
+  const audioRef =
+  useRef(null);
+
+  const [isAlert, setIsAlert] = useState(false);
+
+  const soundActivated =
+  useRef(false);
+
+  const [showButton,
+    setShowButton] =
+    useState(true);
+
+  // ── 1. Load MediaPipe once ─────────────────────────────────────────────────
+  useEffect(() => {
+    mounted.current = true;
+
+    (async () => {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+      );
+      landmarker.current = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: "/hand_landmarker.task" },
+        runningMode: "VIDEO",
+        numHands: 1,
+      });
+      // Start loop only after model is ready
+      rafRef.current = requestAnimationFrame(loop);
+    })();
+
+    return () => {
+      mounted.current = false;
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  // ── 2. Detection loop ──────────────────────────────────────────────────────
+  const beep = async () => {
+
+    if (
+    !soundActivated.current
+    ||
+    !audioRef.current
+    ){
+    console.log("BEEP BLOCKED");
+    return;
+    }
+    
+    try {
+    
+    const audio =
+    audioRef.current;
+    
+    audio.pause();
+    
+    audio.currentTime = 0;
+    
+    audio.volume = 1;
+    
+    await audio.play();
+    
+    console.log(
+    "BEEP PLAYED"
+    );
+    
+    }
+    
+    catch(err){
+    
+    console.log(
+    "BEEP FAILED",
+    err
+    );
+    
+    }
+    
     };
 
-    // Create a zip-like experience: download metadata JSON + open screenshot
-    const metaBlob = new Blob([JSON.stringify(metadata, null, 2)], {
-      type: "application/json",
-    });
-    const metaUrl = URL.createObjectURL(metaBlob);
-    const a = document.createElement("a");
-    a.href = metaUrl;
-    a.download = `detection_${index + 1}_metadata.json`;
-    a.click();
-    URL.revokeObjectURL(metaUrl);
+    const captureScreenshot = async () => {
 
-    // Also download screenshot
-    if (detection.screenshot) {
-      const b = document.createElement("a");
-      b.href = detection.screenshot;
-      b.download = `detection_${index + 1}_screenshot.jpg`;
-      b.click();
+      const video =
+      webcamRef.current?.video;
+      
+      if(!video)
+      return;
+      
+      // only save alerts
+      if(
+      predictionRef.current.confidence < 0.80
+      )
+      return;
+      
+      try{
+      
+      const snap =
+      new Audio("/snap.mp3");
+      
+      await snap.play();
+      
+      }
+      catch{}
+      
+      const canvas =
+      document.createElement(
+      "canvas"
+      );
+      
+      // smaller gallery image
+      canvas.width = 480;
+      
+      canvas.height =
+      video.videoHeight
+      *
+      (
+      480
+      /
+      video.videoWidth
+      );
+      
+      const ctx =
+      canvas.getContext(
+      "2d"
+      );
+      
+      // keep mirror
+      ctx.translate(
+      canvas.width,
+      0
+      );
+      
+      ctx.scale(
+      -1,
+      1);
+      
+      ctx.drawImage(
+      video,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+      );
+      
+      // IMPORTANT:
+      // compress image
+      const image =
+      canvas.toDataURL(
+      "image/jpeg",
+      0.55
+      );
+      
+      const item = {
+      
+      id:
+      Date.now(),
+      
+      image,
+      
+      confidence:
+      Math.round(
+      predictionRef.current.confidence
+      *
+      100
+      ),
+      
+      timestamp:
+      new Date()
+      .toLocaleString(),
+      
+      };
+      
+      let existing =
+      JSON.parse(
+      localStorage.getItem(
+      "captures"
+      )
+      ||
+      "[]"
+      );
+      
+      // keep max 30 screenshots
+      existing =
+      [
+      item,
+      ...existing
+      ].slice(
+      0,
+      30
+      );
+      
+      try{
+      
+      localStorage.setItem(
+      "captures",
+      JSON.stringify(
+      existing
+      )
+      );
+      
+      window.dispatchEvent(
+      new CustomEvent(
+      "gallery-updated"
+      )
+      );
+      
+      console.log(
+      "Saved to gallery"
+      );
+      
+      }
+      
+      catch(err){
+      
+      console.log(
+      "Storage full"
+      );
+      
+      alert(
+      "Gallery full. Delete old screenshots."
+      );
+      
+      }
+      
+    };
+
+  const loop = async () => {
+    if (!mounted.current) return;
+
+    const video  = webcamRef.current?.video;
+    const canvas = canvasRef.current;
+
+    // Wait until video is truly playing
+    if (!video || video.readyState < 4 || !landmarker.current) {
+      rafRef.current = requestAnimationFrame(loop);
+      return;
     }
+
+    // Sync canvas size to video
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const result = landmarker.current.detectForVideo(video, performance.now());
+
+    if (!result.landmarks.length) {
+        setIsAlert(false);
+      
+        rafRef.current =
+          requestAnimationFrame(loop);
+      
+        return;
+      }
+
+    // ── 3. Ask backend what gesture this is ────────────────────────────────
+    let gesture    = "Hand Detected";
+    let confidence = 0;
+
+    if (!processing.current) {
+      processing.current = true;
+      try {
+        const res = await fetch("http://localhost:8000/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // Send first detected hand
+          body: JSON.stringify({ landmarks: result.landmarks[0] }),
+        });
+        if (res.ok) {
+            const data = await res.json();
+          
+            gesture =
+            data.gesture ??
+            "No Signal";
+
+            confidence =
+            data.confidence ??
+            0;
+
+            predictionRef.current = {
+            gesture,
+            confidence,
+            };
+          
+            console.log(
+              `${gesture} · ${Math.round(confidence * 100)}%`
+            );
+          }
+      } catch {
+        // Backend offline — still show green skeleton
+      }
+      processing.current = false;
+    }
+
+    const currentGesture =
+String(
+predictionRef.current.gesture
+)
+.toLowerCase();
+
+const alert =
+    currentGesture.includes(
+    "help"
+    )
+
+    &&
+
+    predictionRef.current
+    .confidence
+
+    >=
+
+    0.80;
+
+    console.log(
+    "ALERT:",
+    alert,
+    "| Gesture:",
+    predictionRef.current.gesture,
+    "| Confidence:",
+    predictionRef.current.confidence
+    );
+
+    if (
+        alert !== isAlert
+        ) {
+        setIsAlert(alert);
+        }
+        
+        if (
+            alert &&
+            !alertTriggered.current
+            ) {
+            
+            console.log(
+            "BEEP"
+            );
+            
+            alertTriggered.current =
+            true;
+            
+            await beep();
+
+            // small delay so audio begins
+            setTimeout(() => {
+
+            captureScreenshot();
+
+            }, 300);
+            
+            }
+        
+        if (
+        !alert
+        ) {
+        
+        alertTriggered.current =
+        false;
+        
+        }
+
+    const color =
+        alert
+        ? "red"
+        : "lime";
+
+    // ── 4. Draw every detected hand ────────────────────────────────────────
+    result.landmarks.forEach((hand)=>{
+
+      HAND_CONNECTIONS.forEach(
+      ([a,b])=>{
+      
+      ctx.beginPath();
+      
+      ctx.moveTo(
+      
+      canvas.width
+      -
+      hand[a].x
+      *
+      canvas.width,
+      
+      hand[a].y
+      *
+      canvas.height
+      
+      );
+      
+      ctx.lineTo(
+      
+      canvas.width
+      -
+      hand[b].x
+      *
+      canvas.width,
+      
+      hand[b].y
+      *
+      canvas.height
+      
+      );
+      
+      ctx.strokeStyle =
+      color;
+      
+      ctx.lineWidth =
+      5;
+      
+      ctx.stroke();
+      
+      }
+      
+      );
+      
+      hand.forEach(
+      (pt)=>{
+      
+      ctx.beginPath();
+      
+      ctx.arc(
+      
+      canvas.width
+      -
+      pt.x
+      *
+      canvas.width,
+      
+      pt.y
+      *
+      canvas.height,
+      
+      6,
+      
+      0,
+      
+      Math.PI*2
+      
+      );
+      
+      ctx.fillStyle =
+      color;
+      
+      ctx.fill();
+      
+      }
+      
+      );
+      
+      });
+
+    rafRef.current = requestAnimationFrame(loop);
   };
 
-  if (detections.length === 0) {
-    return (
-      <div className="mt-6 text-center text-gray-500 text-sm py-8 border border-dashed border-gray-700 rounded-xl">
-        No detections yet. Gesture events will appear here.
-      </div>
-    );
-  }
-
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="mt-6 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-white font-semibold text-lg">
-          Detection Log{" "}
-          <span className="text-red-400 text-sm ml-1">
-            ({detections.length})
-          </span>
-        </h2>
-        {onClear && (
-          <button
-            onClick={onClear}
-            className="text-xs text-gray-500 hover:text-red-400 transition"
-          >
-            Clear all
-          </button>
-        )}
+    <div style={{ position: "relative", width: 640, maxWidth: "100%" }}>
+
+{
+showButton && (
+
+<button
+
+onClick={async()=>{
+
+try{
+
+const audio =
+audioRef.current;
+
+if(!audio)
+return;
+
+// unlock browser audio
+await audio.play();
+
+audio.pause();
+
+audio.currentTime =
+0;
+
+soundActivated.current =
+true;
+
+setShowButton(
+  false
+  );
+
+console.log(
+"Sound unlocked"
+);
+
+}
+
+catch(err){
+
+console.log(
+"Enable failed",
+err
+);
+
+}
+
+}}
+
+style={{
+position:"absolute",
+top:10,
+right:10,
+zIndex:10,
+padding:"10px 16px",
+}}
+
+>
+
+Enable Sound
+
+</button>
+
+)
+}
+
+      {/* Webcam — mirrored so it looks natural */}
+      <Webcam
+        ref={webcamRef}
+        mirrored
+        audio={false}
+        style={{ width: "100%", display: "block" }}
+        videoConstraints={{ width: 640, height: 480, facingMode: "user" }}
+      />
+
+      {/* Canvas overlay — NO css transform needed; we mirror coords manually */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: "absolute",
+          top: 0, left: 0,
+          width: "100%", height: "100%",
+          pointerEvents: "none",
+        }}
+      />
+
+      <audio
+      ref={audioRef}
+      preload="auto"
+      playsInline
+      >
+      <source src="/beep.mp3" type="audio/mpeg" />
+    </audio>
+
+      {/* Status badge */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 12, left: 12,
+          padding: "4px 12px",
+          borderRadius: 999,
+          fontSize: 14,
+          fontWeight: 600,
+          color: "#fff",
+          background: isAlert ? "#ef4444" : "rgba(0,0,0,0.55)",
+        }}
+      >
+        {isAlert
+        ? "ALERT"
+        : "Monitoring"}
       </div>
 
-      {[...detections].reverse().map((d, i) => {
-        const realIndex = detections.length - 1 - i;
-        const isOpen = expandedId === realIndex;
-        const pct = Math.round(d.confidence * 100);
-        const time = new Date(d.timestamp).toLocaleTimeString();
-
-        return (
-          <div
-            key={realIndex}
-            className="bg-gray-900 border border-red-800 rounded-lg overflow-hidden"
-          >
-            {/* Header row */}
-            <button
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition"
-              onClick={() => setExpandedId(isOpen ? null : realIndex)}
-            >
-              <div className="flex items-center gap-3 text-left">
-                <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                <span className="text-white text-sm font-medium">{d.gesture}</span>
-                <span className="text-gray-400 text-xs">{time}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className={`text-xs font-bold px-2 py-0.5 rounded-full
-                    ${pct >= 90 ? "bg-red-900 text-red-300" : "bg-yellow-900 text-yellow-300"}`}
-                >
-                  {pct}%
-                </span>
-                <span className="text-gray-500 text-xs">{isOpen ? "▲" : "▼"}</span>
-              </div>
-            </button>
-
-            {/* Expanded detail */}
-            {isOpen && (
-              <div className="px-4 pb-4 border-t border-gray-800">
-                {d.screenshot && (
-                  <img
-                    src={d.screenshot}
-                    alt="Detection screenshot"
-                    className="mt-3 rounded-lg w-full max-w-xs border border-gray-700"
-                  />
-                )}
-                <div className="mt-3 text-xs text-gray-400 font-mono space-y-1">
-                  <p>Timestamp: {d.timestamp}</p>
-                  <p>Confidence: {pct}%</p>
-                </div>
-                <button
-                  onClick={() => downloadEvidence(d, realIndex)}
-                  className="mt-3 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md transition"
-                >
-                  ⬇ Download evidence
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+</div>
   );
 }
