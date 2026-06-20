@@ -31,7 +31,13 @@ export default function ScreenshotCard() {
   useRef(null);
 
   const [isAlert, setIsAlert] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
+
+  const soundActivated =
+  useRef(false);
+
+  const [showButton,
+    setShowButton] =
+    useState(true);
 
   // ── 1. Load MediaPipe once ─────────────────────────────────────────────────
   useEffect(() => {
@@ -60,33 +66,43 @@ export default function ScreenshotCard() {
   const beep = async () => {
 
     if (
-      !audioRef.current ||
-      !soundEnabled
-    )
+    !soundActivated.current
+    ||
+    !audioRef.current
+    ){
+    console.log("BEEP BLOCKED");
     return;
-  
+    }
+    
     try {
-  
-      audioRef.current.pause();
-  
-      audioRef.current.currentTime = 0;
-  
-      await audioRef.current.play();
-  
-      console.log("BEEP PLAYED");
-  
+    
+    const audio =
+    audioRef.current;
+    
+    audio.pause();
+    
+    audio.currentTime = 0;
+    
+    audio.volume = 1;
+    
+    await audio.play();
+    
+    console.log(
+    "BEEP PLAYED"
+    );
+    
     }
-  
-    catch (err) {
-  
-      console.log(
-        "BEEP FAILED",
-        err
-      );
-  
+    
+    catch(err){
+    
+    console.log(
+    "BEEP FAILED",
+    err
+    );
+    
     }
-  
-  };
+    
+    };
 
   const captureScreenshot = () => {
 
@@ -248,9 +264,14 @@ const alert =
             alertTriggered.current =
             true;
             
-            beep();
+            await beep();
+
+            // small delay so audio begins
+            setTimeout(() => {
 
             captureScreenshot();
+
+            }, 300);
             
             }
         
@@ -322,76 +343,69 @@ const alert =
   return (
     <div style={{ position: "relative", width: 640, maxWidth: "100%" }}>
 
-<button
-  onClick={async () => {
-
-    if (!audioRef.current)
-    return;
-
-    if (!soundEnabled) {
-
-      try {
-
-        await audioRef.current.play();
-
-        setTimeout(() => {
-
-          audioRef.current.pause();
-
-          audioRef.current.currentTime = 0;
-
-        }, 200);
-
-        setSoundEnabled(true);
-
-        console.log(
-          "Sound enabled"
-        );
-
-      }
-
-      catch (err) {
-
-        console.log(
-          "Enable failed",
-          err
-        );
-
-      }
-
-    }
-
-    else {
-
-      audioRef.current.pause();
-
-      audioRef.current.currentTime = 0;
-
-      setSoundEnabled(false);
-
-      console.log(
-        "Sound disabled"
-      );
-
-    }
-
-  }}
-
-  style={{
-    position: "absolute",
-    top: 10,
-    right: 10,
-    zIndex: 10,
-  }}
->
-
 {
-soundEnabled
-? "Disable Sound"
-: "Enable Sound"
+showButton && (
+
+<button
+
+onClick={async()=>{
+
+try{
+
+const audio =
+audioRef.current;
+
+if(!audio)
+return;
+
+// unlock browser audio
+await audio.play();
+
+audio.pause();
+
+audio.currentTime =
+0;
+
+soundActivated.current =
+true;
+
+setShowButton(
+  false
+  );
+
+console.log(
+"Sound unlocked"
+);
+
 }
 
+catch(err){
+
+console.log(
+"Enable failed",
+err
+);
+
+}
+
+}}
+
+style={{
+position:"absolute",
+top:10,
+right:10,
+zIndex:10,
+padding:"10px 16px",
+}}
+
+>
+
+Enable Sound
+
 </button>
+
+)
+}
 
       {/* Webcam — mirrored so it looks natural */}
       <Webcam
@@ -413,10 +427,11 @@ soundEnabled
         }}
       />
 
-    <audio
+      <audio
       ref={audioRef}
       preload="auto"
-    >
+      playsInline
+      >
       <source src="/beep.mp3" type="audio/mpeg" />
     </audio>
 
