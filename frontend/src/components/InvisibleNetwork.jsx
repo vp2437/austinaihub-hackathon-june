@@ -135,6 +135,8 @@ import {
 
     const [activeNode, setActiveNode] = useState("victim");
 
+    const abortRef = useRef(null);
+
     const victimStyle = {
     background: "#4f8cff",
     color: "white",
@@ -146,6 +148,8 @@ import {
     };
 
     const resetGraph = () => {
+
+        if (abortRef.current) abortRef.current.abort();
 
         setNodes([
           {
@@ -172,6 +176,7 @@ import {
         
         setAiInsight(null);
         setSelectedEdge(null);
+        setLoadingInsight(false);
       
         setCenter(
           500,
@@ -831,8 +836,8 @@ if (node.id === "victim") {
             color: "#94a3b8",
             marginTop: 20,
         }}>
-        Click any node to reveal its
-        connections.
+        Click any node or edge to get more
+        information.
         </p>
 
         </div>
