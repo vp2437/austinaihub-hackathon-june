@@ -247,7 +247,7 @@ export default function ScreenshotCard() {
 
     const detected =
         currentGesture.includes("help") &&
-        predictionRef.current.confidence >= 0.95;
+        predictionRef.current.confidence >= 0.90;
 
     if (detected) {
         alertFrames.current++;
@@ -255,7 +255,7 @@ export default function ScreenshotCard() {
         alertFrames.current = 0;
     }
 
-    const alert = alertFrames.current >= 8;
+    const alert = alertFrames.current >= 5;
 
     console.log(
     "ALERT:",
@@ -291,7 +291,7 @@ export default function ScreenshotCard() {
 
             captureScreenshot();
 
-            }, 300);
+            }, 50);
             
             }
         
