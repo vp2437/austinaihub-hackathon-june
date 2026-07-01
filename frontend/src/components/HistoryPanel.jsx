@@ -287,7 +287,7 @@ export default function HistoryPanel() {
     if (!processing.current) {
       processing.current = true;
       try {
-        const res = await fetch("http://localhost:8000/predict", {
+        const res = await fetch("https://austinaihub-hackathon-june.onrender.com/predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // Send first detected hand
